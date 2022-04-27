@@ -1,12 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import rx_data
+import math
 
 from scipy import linalg
 from ReactorSlice import ReactorSlice
 
 class Reactor:
-    def __init__(self, slices, reactor_size, enrichment, nu, rxdata, simulation_time, dt, power):
+    def __init__(self, slices, reactor_size, enrichment, nu, rxdata, simulation_time, dt, power, shield=False):
         self.reactor_size = reactor_size
         self.dx = float(reactor_size/(slices-1))
         self.enrich = enrichment
@@ -15,6 +16,7 @@ class Reactor:
         self.rxdata = rxdata
         self.microxs = rxdata[0]
         self.f_yields = rxdata[1]
+        self.shielding = shield
         self.initial_comp = self.initialize_EN()
         self.nucs = list(self.microxs.keys())
         self.nu = nu
@@ -28,8 +30,17 @@ class Reactor:
         self.k = []
 
     def build_reactor_slices(self):
-        for _ in range(self.slices):
-            self.rxslices.append(ReactorSlice(self.dx, self.initial_comp, self.rxdata, self.nucs))
+        if self.shielding is False:
+            for _ in range(self.slices):
+                self.rxslices.append(ReactorSlice(self.dx, self.initial_comp, self.rxdata, self.nucs))
+        if self.shielding is True:
+            l = math.floor(self.slices/2)
+            for _ in range(l):
+                self.rxslices.append(ReactorSlice(self.dx, [0, 0, 0, 0, 0, 1/18.0 * 6.022E23], self.rxdata, self.nucs))     
+            for _ in range(self.slices):
+                self.rxslices.append(ReactorSlice(self.dx, self.initial_comp, self.rxdata, self.nucs))
+            for _ in range(l):
+                self.rxslices.append(ReactorSlice(self.dx, [0, 0, 0, 0, 0, 1/18.0 * 6.022E23], self.rxdata, self.nucs))                 
 
     def initialize_EN(self):
         N_U = 18.65/ ((1-self.enrich)*238.0 + (self.enrich)*235.0) * 6.022E23
@@ -39,9 +50,9 @@ class Reactor:
         return [N_U235, N_U238, 0, 0, 0, N_H20]
 
     def build_constant_array(self, time):
-        d = [0] * self.slices
-        sigma_a = [0] * self.slices
-        sigma_f = [0] * self.slices
+        d = [0] * len(self.rxslices)
+        sigma_a = [0] * len(self.rxslices)
+        sigma_f = [0] * len(self.rxslices)
         i = 0
         for rx in self.rxslices:
             constants = rx.calculate_constants(time)
@@ -49,18 +60,18 @@ class Reactor:
             sigma_a[i] = constants[1]
             sigma_f[i] = constants[2]
             i+=1
-        d.insert(0, d[0])
-        d.append(d[-1])
+        d.insert(0,0)
+        d.append(0)
         return d, sigma_a, sigma_f
 
     def build_diffusion_matrix(self, d, sigma_a):
         matrix = []
-        for i in range(1, self.slices+1):
-            row = [0] * self.slices
+        for i in range(1, len(self.rxslices)+1):
+            row = [0] * len(self.rxslices)
             if i == 1:
                 row[i-1] = - (1/(2*self.dx**2)) * (d[i-1] + 2 * d[i] + d[i+1]) - sigma_a[i-1]
                 row[i] = (1/(2* self.dx**2)) * (d[i] + d[i+1])
-            elif i == self.slices:
+            elif i == len(self.rxslices):
                 row[i-2] = (1/(2*self.dx**2)) * (d[i-1] + d[i])
                 row[i-1] = -(1/(2*self.dx**2)) * (d[i-1] + 2 * d[i] + d[i+1]) - sigma_a[i-1]
             else:
@@ -72,7 +83,7 @@ class Reactor:
         return matrix
 
     def build_fission_matrix(self, sigma_f):
-        sigma_f_m = np.identity(self.slices) * sigma_f * self.nu
+        sigma_f_m = np.identity(len(self.rxslices)) * sigma_f * self.nu
         return sigma_f_m
 
     def calculate_scaled_flux(self, flux):
@@ -91,30 +102,38 @@ class Reactor:
         diff_matrix = self.build_diffusion_matrix(d, sigma_a)
         fission_matrix = self.build_fission_matrix(sigma_f)
         w, v = linalg.eig(diff_matrix, b=fission_matrix)
+        w = w.real
+        w[w > 0 ] = -1e299
         flux = np.abs(v[:,np.argmax(w)])
-        for i in range(self.slices):
+        for i in range(len(self.rxslices)):
             self.rxslices[i].flux = flux[i]
         flux = self.calculate_scaled_flux(flux)
         self.flux.append(flux)
 
-    def calculate_criticality(self):
+    def calculate_criticality(self, time):
         neutrons_produced = 0.0
         neutrons_absorbed = 0.0
         for s_slice in self.rxslices:
             neutrons_produced += s_slice.flux * (s_slice.sigma_f * self.nu)
-            neutrons_absorbed += s_slice.flux * (s_slice.sigma_f + s_slice.sigma_a)
-        criticality = neutrons_produced/neutrons_absorbed
+            neutrons_absorbed += s_slice.flux * (s_slice.sigma_a)
+        if self.shielding is True:
+            l = math.floor(self.slices/2)
+            n_p = (self.flux[time][l] + self.flux[time][l+self.slices-1])/(sum(self.flux[time][l:l+self.slices-1])*2*self.dx)
+        else:
+            n_p = (self.flux[time][0] + self.flux[time][-1])/(sum(self.flux[time])*2*self.dx)
+        print(n_p)
+        criticality = neutrons_produced/neutrons_absorbed * n_p
         return criticality
 
     def burn_reactor(self):
+        i = 0
         for t in np.arange(0, self.simulation_time, self.dt):
             self.calculate_flux(t)
             for s in self.rxslices:
                 s.compute_reaction_rate_matrix(self.microxs, self.f_yields)
                 s.evolution_solver(self.dt, t)  
-            self.k.append(self.calculate_criticality())
-            if self.calculate_criticality() <= 1.0:
-                return
+            self.k.append(self.calculate_criticality(i))
+            i+=1
     
     def plot_flux(self):
         i = 0
@@ -158,7 +177,8 @@ class Reactor:
 
 def reactor():
     rxdata = [rx_data.microscopic_cross_sections, rx_data.fission_yield]
-    x = Reactor(20, 1, 0.10, 2.4, rxdata, 1000*86400, 86400, 0.001)
+    x = Reactor(10, 1, 0.06, 2.4, rxdata, 500*86400, 86400, 0.001, shield=False)
+    #x = Reactor(10, 1, 0.007, 2.4, rxdata, 500*86400, 86400, 0.001, shield=True)
     x.burn_reactor()
     return x
 
