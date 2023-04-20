@@ -28,6 +28,9 @@ class Reactor:
         self.build_reactor_slices()
         self.scaling_constant = 0.
         self.k = []
+        self.d = []
+        self.siga = []
+        self.sigf = []
 
     def build_reactor_slices(self):
         if self.shielding is False:
@@ -62,6 +65,9 @@ class Reactor:
             i+=1
         d.insert(0,0)
         d.append(0)
+        self.d = np.array(d)
+        self.siga = np.array(sigma_a)
+        self.sigf = np.array(sigma_f)
         return d, sigma_a, sigma_f
 
     def build_diffusion_matrix(self, d, sigma_a):
@@ -111,18 +117,20 @@ class Reactor:
         self.flux.append(flux)
 
     def calculate_criticality(self, time):
-        neutrons_produced = 0.0
-        neutrons_absorbed = 0.0
-        for s_slice in self.rxslices:
-            neutrons_produced += s_slice.flux * (s_slice.sigma_f * self.nu)
-            neutrons_absorbed += s_slice.flux * (s_slice.sigma_a)
         if self.shielding is True:
             l = math.floor(self.slices/2)
-            n_p = (self.flux[time][l] + self.flux[time][l+self.slices-1])/(sum(self.flux[time][l:l+self.slices-1])*2*self.dx)
+            neutrons_produced = sum(self.flux[time][l:l+self.slices] * (self.sigf[l:l+self.slices] * self.nu))*self.dx**2
+            neutrons_absorbed = sum(self.flux[time][l:l+self.slices] * (self.siga[l:l+self.slices]))*self.dx**2
+            n_p = (self.flux[time][l] + self.flux[time][l+1])*2*self.dx*self.d[l+1]
         else:
-            n_p = (self.flux[time][0] + self.flux[time][-1])/(sum(self.flux[time])*2*self.dx)
+            neutrons_produced = self.flux * (self.sigf * self.nu)
+            neutrons_absorbed = self.flux * (self.siga)
+            n_p = (self.flux[time][-1] + 0)*2*self.dx*self.d[-1]
+        print(neutrons_absorbed)
+        print(neutrons_produced)
         print(n_p)
-        criticality = neutrons_produced/neutrons_absorbed * n_p
+        criticality = neutrons_produced - neutrons_absorbed-n_p
+        self.k.append(criticality)
         return criticality
 
     def burn_reactor(self):
@@ -177,7 +185,7 @@ class Reactor:
 
 def reactor():
     rxdata = [rx_data.microscopic_cross_sections, rx_data.fission_yield]
-    x = Reactor(10, 1, 0.06, 2.4, rxdata, 500*86400, 86400, 0.001, shield=False)
+    x = Reactor(200, 1, 0.0373023571410201, 2.4, rxdata, 1*86400, 86400, 0.001, shield=True)
     #x = Reactor(10, 1, 0.007, 2.4, rxdata, 500*86400, 86400, 0.001, shield=True)
     x.burn_reactor()
     return x
@@ -195,12 +203,12 @@ x = reactor()
 plt.plot(x.k)
 plt.title('Criticality')
 plt.show()
-x.plot_flux()
-x.plot_iso(0)
-x.plot_iso(1)
-x.plot_iso(2)
-x.plot_iso(3)
-x.plot_iso(4)
+#x.plot_flux()
+#x.plot_iso(0)
+#x.plot_iso(1)
+#x.plot_iso(2)
+#x.plot_iso(3)
+#x.plot_iso(4)
 
 #print(x.initial_comp)
-x.plot_flux_by_time()
+#x.plot_flux_by_time()

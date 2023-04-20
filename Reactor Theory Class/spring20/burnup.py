@@ -61,7 +61,6 @@ def plotit(name, x, y, color='blue'):
     plt.close()
 
 if __name__ == '__main__':
-
     tracked = ('U235', 'U238', 'Pu239', 'Xe135', 'lumped_FP')
 
     initial_compositions = [1e20, 2.4e21, 0, 0, 0]
@@ -76,7 +75,5 @@ if __name__ == '__main__':
 
     # evolution_compositions: [ [1e20, 2.4e21, 0, 0, 0], [...], [...] ]
     plot_manager(time_days, evolution_compositions, tracked)
-
-
 
     # Ax = B ; A * N(t+1) = N(t)
