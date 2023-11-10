@@ -9,7 +9,7 @@ from ReactorSlice import ReactorSlice
 class Reactor:
     def __init__(self, slices, reactor_size, enrichment, nu, rxdata, simulation_time, dt, power, shield=False):
         self.reactor_size = reactor_size
-        self.dx = float(reactor_size/(slices-1))
+        self.dx = float(reactor_size/(slices))
         self.enrich = enrichment
         self.slices = slices
         self.time = 0
@@ -49,7 +49,7 @@ class Reactor:
         N_U = 18.65/ ((1-self.enrich)*238.0 + (self.enrich)*235.0) * 6.022E23
         N_U235 = self.enrich * N_U * 0.5
         N_U238 = (1.- self.enrich) * N_U * 0.5
-        N_H20 = 0.5/18.0 * 6.022E23
+        N_H20 = 0.5 / 18.0 * 6.022E23
         return [N_U235, N_U238, 0, 0, 0, N_H20]
 
     def build_constant_array(self, time):
@@ -90,7 +90,7 @@ class Reactor:
         return matrix
 
     def build_fission_matrix(self, sigma_f):
-        sigma_f_m = np.identity(len(self.rxslices)) * sigma_f * self.nu
+        sigma_f_m = np.identity(len(self.rxslices)) * sigma_f * (self.nu)
         return sigma_f_m
 
     def calculate_scaled_flux(self, flux):
@@ -109,8 +109,7 @@ class Reactor:
         diff_matrix = self.build_diffusion_matrix(d, sigma_a)
         fission_matrix = self.build_fission_matrix(sigma_f)
         w, v = linalg.eig(diff_matrix, b=fission_matrix)
-        w = w.real
-        w[w > 0 ] = -1e299
+        w[w==np.inf] = -1e299
         flux = np.abs(v[:,np.argmax(w)])
         for i in range(len(self.rxslices)):
             self.rxslices[i].flux = flux[i]
@@ -205,7 +204,7 @@ print(x.k[1])
 plt.title('Criticality')
 plt.show()
 #x.plot_flux()
-#x.plot_iso(0)
+x.plot_iso(0)
 #x.plot_iso(1)
 #x.plot_iso(2)
 #x.plot_iso(3)

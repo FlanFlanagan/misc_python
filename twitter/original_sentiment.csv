@@ -1,0 +1,2 @@
+tweetid	author_id	created_at	retweet_count	followers	text	keywords	sentiment_logistic_regression	sentiment_naive_bayes	sentiment_sentistrength
+1379344963918512130	48315339	2021-04-06T08:07:21.000Z	996	44186	Statutory sick pay goes up today from   95.85 to   96.35 a week. Thats a rise of just 50p a week - during a global pandemic. And 2 million workers dont even earn enough to qualify. We need decent #SickPayForAll now.	Statutory sick pay goes up today rise just week during global pandemic million	0.261	0.446	-1.000

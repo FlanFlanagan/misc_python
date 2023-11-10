@@ -1,6 +1,6 @@
 microscopic_cross_sections = {
     'U235': {'xs_fission': 585.1,
-             'xs_absorption': 673.9,
+             'xs_absorption': 682.9,
              'xs_scattering': 15.12},
     'U238': {'xs_fission': 0.,
              'xs_absorption': 2.6, 
@@ -20,5 +20,4 @@ microscopic_cross_sections = {
             'xs_absorption': 0.664,
             'xs_scattering': 103.0}
 }
-
 fission_yield = {'Xe135': 0.06}
